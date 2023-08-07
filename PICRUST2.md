@@ -34,7 +34,7 @@ add_descriptions.py -i pathways_out/path_abun_unstrat.tsv.gz -m METACYC \
                     -o pathways_out/path_abun_unstrat_descrip.tsv.gz
 ```
 
-##生成 kegg pathway丰度表
+## 生成 kegg pathway丰度表
 ```
 pathway_pipeline.py -i KO_metagenome_out/pred_metagenome_unstrat.tsv.gz \
     -o KEGG_pathways_out --no_regroup \
@@ -48,7 +48,7 @@ add_descriptions.py -i KEGG_pathways_out/path_abun_unstrat.tsv.gz \
     -o KEGG_pathways_out/path_abun_unstrat_descrip.tsv.gz
 ```
 
-##KEGG层级分析
+## KEGG层级分析
 ```
 git clone https://github.com/YongxinLiu/EasyMicrobiome
 
