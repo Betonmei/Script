@@ -8,16 +8,16 @@ conda env create -n qiime2-2022.11 --file qiime2-2022.11-py38-linux-conda.yml
 rm qiime2-2022.11-py38-linux-conda.yml
 ```
 
-# 激活
+#激活
 ```
 conda activate qiime2-2022.11
 qiime --help
 conda info --envs
 ```
 
-# 一、预处理
+#一、预处理
 
-## 【1】数据导入
+##【1】数据导入
 
 ### 双端数据导入
 
@@ -39,13 +39,21 @@ time qiime tools import \
   --input-format SingleEndFastqManifestPhred33V2
 ```
 
-## 【2】去除引物
+##【2】去除引物
 ```
 time qiime cutadapt trim-single \
 --i-demultiplexed-sequences paired-end-demux.qza\
---p-front-f GTGCCAGCMGCCGCGGTAA \
---p-front-r GGACTACHVGGGTWTCTAAT \
+--p-front-f GAGTTTGATCCTGGCTCAG \
+--p-front-r TGCTGCCTCCCGTAGGAGT \
 --o-trimmed-sequences paired-demux.qza \
+--verbose \
+&> primer_trimming.log
+
+qiime cutadapt trim-paired \
+--i-demultiplexed-sequences paired-end-demux.qza \
+--p-cores 8 --p-front-f AGAGTTTGATCCTGGCTCAG \
+--p-front-r TGCTGCCTCCCGTAGGAGT \
+--o-trimmed-sequences paired-demux.qza \  
 --verbose \
 &> primer_trimming.log
 ```
@@ -64,18 +72,18 @@ time qiime demux summarize \
 
 ```
 time qiime demux summarize \
---i-data single-end-demux.qza \
---o-visualization single-end-demux.qzv
+--i-data single-end-demux-E4.qza \
+--o-visualization single-end-demux-E4.qzv
 ```
 
 
-## 【4】deblur降噪
+##【4】deblur降噪
 ### 合并
 
 ```
 time qiime vsearch merge-pairs \
---i-demultiplexed-seqs paired-end-demux.qza \ 
---o-merged-sequences merged.qza
+  --i-demultiplexed-seqs paired-end-demux.qza \
+  --o-merged-sequences merged.qza
 ```
 
 ### 可视化
@@ -86,9 +94,7 @@ time qiime demux summarize \
 --o-visualization merged.qzv
 ```
 
-### q-score
-
-#### 双端合并数据
+### 双端合并数据
 
 ```
 time qiime quality-filter q-score \
@@ -119,9 +125,9 @@ time qiime metadata tabulate \
 #### 单端
 
 ```
-time qiime metadata tabulate \
---m-input-file filtered-stats.qza \ 
---o-visualization filtered-stats.qzv
+qiime metadata tabulate \
+    --m-input-file filtered-stats.qza \
+    --o-visualization filtered-stats.qza.qzv
 ```
 
 ### 降噪
@@ -129,7 +135,17 @@ time qiime metadata tabulate \
 ```
 time qiime deblur denoise-16S \
 --i-demultiplexed-seqs merged-filtered.qza \
---p-trim-length 251 \
+--p-trim-length 150 \
+--p-sample-stats \
+--o-representative-sequences rep-seqs.qza \
+--o-table table.qza \
+--o-stats deblur-stats.qza
+```
+
+```
+time qiime deblur denoise-16S \
+--i-demultiplexed-seqs filtered.qza \
+--p-trim-length 150 \
 --p-sample-stats \
 --o-representative-sequences rep-seqs.qza \
 --o-table table.qza \
@@ -144,7 +160,7 @@ time qiime deblur visualize-stats \
 --o-visualization deblur-stats.qzv
 ```
 
-## 【4】合并数据
+##【4】合并数据
 
 ### 特征表
 
@@ -155,7 +171,7 @@ time qiime feature-table merge \
 --o-merged-table table.qza
 ```
 
-### 数据代表数列
+###数据代表数列
 ```
 time qiime feature-table merge-seqs \
 --i-data rep-seqs-1.qza \
@@ -172,7 +188,7 @@ time qiime feature-table summarize \
 ```
 
 ```
-qiime feature-table tabulate-seqs \
+time qiime feature-table tabulate-seqs \
 --i-data rep-seqs.qza \
 --o-visualization rep-seqs.qzv
 ```
@@ -180,13 +196,21 @@ qiime feature-table tabulate-seqs \
 ## 【5】TSV生成
 
 ```
-qiime tools export \
+time qiime tools export \
   --input-path table.qza \
   --output-path exported-feature-table
 ```
 
 ```
-biom convert -i feature-table.biom -o feature-table.tsv --to-tsv --header-key taxonomy
+biom convert -i exported-feature-table/feature-table.biom -o table.tsv --to-tsv --header-key taxonomy
+
+biom convert -i feature-table.tsv -o table.biom --to-hdf5 --table-type="OTU table" --process-obs-metadata taxonomy
+  
+qiime tools import \
+  --input-path table.biom \
+  --type 'FeatureTable[Frequency]' \
+  --input-format BIOMV210Format \
+  --output-path table.qza
 ```
 
 
@@ -215,7 +239,7 @@ qiime feature-table filter-features \
   --o-filtered-table filtered-30-10-table.qza
 ```
 
-### 样品中包括极少的特征，也可以过滤掉
+###样品中包括极少的特征，也可以过滤掉
 ```
 qiime feature-table filter-samples \
   --i-table table.qza \
@@ -223,7 +247,7 @@ qiime feature-table filter-samples \
   --o-filtered-table feature-contingency-filtered-table.qza
 ```
 
-### 基于物种过滤
+###基于物种过滤
 ```
 qiime taxa filter-table \
   --i-table table.qza \
@@ -232,7 +256,7 @@ qiime taxa filter-table \
   --o-filtered-table table-no-mitochondria.qza
 ```
 
-### q2-taxa插件提供了一种方法filter-seqs，用于根据功能的分类注释过滤代表序列FeatureData[Sequence]。
+###q2-taxa插件提供了一种方法filter-seqs，用于根据功能的分类注释过滤代表序列FeatureData[Sequence]。
 ```
 qiime taxa filter-seqs \
   --i-sequences sequences.qza \
@@ -242,7 +266,7 @@ qiime taxa filter-seqs \
   --o-filtered-sequences sequences-with-phyla-no-mitochondria-no-chloroplast.qza
 ```
 
-### 保留包含门级注释的所有物种，但在其分类注释中排除包含线粒体或叶绿体的所有序列。排除宿主污染
+###保留包含门级注释的所有物种，但在其分类注释中排除包含线粒体或叶绿体的所有序列。排除宿主污染
 ```
 qiime taxa filter-table \
   --i-table table.qza \
@@ -270,7 +294,7 @@ qiime feature-table filter-samples \
 ```
 
 
-## 【7】构建进化树
+##【7】构建进化树
 ```
 time qiime phylogeny align-to-tree-mafft-fasttree \
 --i-sequences rep-seqs.qza \
@@ -278,9 +302,16 @@ time qiime phylogeny align-to-tree-mafft-fasttree \
 --o-masked-alignment masked-aligned-rep-seqs.qza \ #过滤去除高变区后的多序列比对结果
 --o-rooted-tree rooted-tree.qza \ #有根树，用于多样性分析
 --o-tree unrooted-tree.qza #无根树
+
+time qiime phylogeny align-to-tree-mafft-fasttree \
+--i-sequences rep-seqs.qza \
+--o-alignment aligned-rep-seqs.qza \
+--o-masked-alignment masked-aligned-rep-seqs.qza \
+--o-rooted-tree rooted-tree.qza \
+--o-tree unrooted-tree.qza
 ```
 
-## 【8】多样性分析
+##【8】多样性分析
 ### 抽平
 
 ```
@@ -297,7 +328,7 @@ qiime feature-table summarize \
   --m-sample-metadata-file metadata.txt
 ```
 
-### 计算核心多样性，采样深度通常选择最小值，来自table.qzv
+###计算核心多样性，采样深度通常选择最小值，来自table.qzv
 ```
 time qiime diversity core-metrics-phylogenetic \
 --i-phylogeny rooted-tree.qza \
@@ -328,7 +359,7 @@ Faith’s系统发育多样性，特征之间的系统发育关系的群落丰�
 可选的alpha指数有faith_pd、shannon、observed_features、evenness
 
 ```
-index=observed_features
+index=faith_pd
 qiime diversity alpha-group-significance \
   --i-alpha-diversity core-metrics-results/${index}_vector.qza \
   --m-metadata-file metadata.txt \
@@ -345,7 +376,7 @@ Bray-Curtis距离。群落差异的定量度量，较常用
 可选的beta指数有 unweighted_unifrac、bray_curtis、weighted_unifrac和jaccard
 
 ```
-distance=jaccard
+distance=bray_curtis
 column=group
 qiime diversity beta-group-significance \
   --i-distance-matrix core-metrics-results/${distance}_distance_matrix.qza \
@@ -357,9 +388,9 @@ qiime diversity beta-group-significance \
 
 
 
-## 【9】物种注释
+##【9】物种注释
 
-### 物种注释数据训练集
+###物种注释数据训练集
 
 ```
 wget -c ftp://greengenes.microbio.me/greengenes_release/gg_13_5/gg_13_8_otus.tar.gz
@@ -367,7 +398,7 @@ wget -c http://210.75.224.110/db/GreenGenes/gg_13_8_otus.tar.gz
 tar -zxvf gg_13_8_otus.tar.gz
 ```
 
-### 使用rep_set文件中的99_otus.fasta数据和taxonomy中的99_OTU_taxonomy.txt数据作为参考物种注释
+###使用rep_set文件中的99_otus.fasta数据和taxonomy中的99_OTU_taxonomy.txt数据作为参考物种注释
 #### 导入参考序列
 
 ```
@@ -412,7 +443,7 @@ time qiime feature-classifier fit-classifier-naive-bayes \
 --o-classifier classifier_gg_13_8_99_V4.qza
 ```
 
-### 物种注释
+###物种注释
 ```
 time qiime feature-classifier classify-sklearn \
 --i-classifier classifier_gg_13_8_99_V4.qza \
@@ -420,7 +451,7 @@ time qiime feature-classifier classify-sklearn \
 --o-classification taxonomy.qza
 ```
 
-### 可视化物种注释
+###可视化物种注释
 ```
 time qiime metadata tabulate \
 --m-input-file taxonomy.qza \
@@ -437,7 +468,7 @@ qiime vsearch cluster-features-closed-reference \
  --output-dir ref_99_otu
 ```
 
-### 堆叠柱状图
+###堆叠柱状图
 ```
 time qiime taxa barplot \
 --i-table table.qza \
@@ -446,7 +477,7 @@ time qiime taxa barplot \
 --o-visualization taxa-bar-plots.qzv
 ```
 
-## 【10】差异分析
+##【10】差异分析
 ### 格式化特征表，添加伪计数
 
 ```
@@ -465,7 +496,7 @@ time qiime composition ancom \
 --o-visualization ancom-group.qzv
 ```
 
-### 种属水平合并并统计(在属水平重叠合并)
+###种属水平合并并统计(在属水平重叠合并)
 ```
 time qiime taxa collapse \
 --i-table table.qza \
